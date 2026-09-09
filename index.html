@@ -78,6 +78,11 @@
             </div>
           </div>
 
+          <!-- Clear Data Button -->
+          <button class="btn btn-header btn-header-danger" id="btnClearAllData" title="Clear loaded CSV data and start fresh">
+            <i data-lucide="trash-2"></i> Clear Data
+          </button>
+
           <!-- Download Report Button -->
           <button class="btn btn-header-accent" id="btnOpenReportModal">
             <i data-lucide="file-text"></i> Download Report
@@ -153,6 +158,9 @@
               </button>
               <button class="btn btn-secondary" id="btnLoadSampleData">
                 <i data-lucide="sparkles"></i> Reload Data
+              </button>
+              <button class="btn btn-danger" id="btnClearDataDrawer" title="Clear loaded CSV data">
+                <i data-lucide="trash-2"></i> Clear Data
               </button>
             </div>
           </div>
@@ -936,6 +944,65 @@
     </div>
 
   </main>
+
+  <!-- =========================================================================
+       FOOTER BRANDING & CREDITS (DEVELOPED BY THAKUR MANO / MANO RAJPUT)
+       ========================================================================= -->
+  <footer class="app-footer" id="appFooter">
+    <div class="footer-container">
+      <div class="footer-left">
+        <div class="footer-brand">
+          <div class="footer-brand-icon">
+            <i data-lucide="bar-chart-3"></i>
+          </div>
+          <div>
+            <div class="footer-brand-title">SALES &amp; ITEM ANALYTICS DASHBOARD</div>
+            <div class="footer-brand-subtitle">Executive BI &amp; Ledger Performance Intelligence</div>
+          </div>
+        </div>
+        <p class="footer-text">
+          Enterprise client-side CSV processing with intelligent pivot/matrix mapping, 6-month comparative analytics, and real-time report generation. 100% secure client-side execution.
+        </p>
+      </div>
+
+      <div class="footer-center">
+        <div class="developer-card">
+          <span class="developer-tag">DEVELOPED BY</span>
+          <a href="https://manohar.marketingub.in/" target="_blank" rel="noopener noreferrer" class="developer-name-link" title="Visit Developer Portfolio">
+            <i data-lucide="award"></i>
+            <span>THAKUR MANO</span>
+            <span class="developer-subname">(MANO RAJPUT)</span>
+            <i data-lucide="external-link" class="ext-icon"></i>
+          </a>
+          <a href="https://manohar.marketingub.in/" target="_blank" rel="noopener noreferrer" class="developer-url-pill">
+            <i data-lucide="globe"></i>
+            <span>manohar.marketingub.in</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-right">
+        <div class="footer-links-group">
+          <div class="footer-links-title">Quick Actions</div>
+          <div class="footer-buttons-row">
+            <button class="btn btn-sm btn-footer" id="btnFooterClearData" title="Clear all loaded CSV data">
+              <i data-lucide="trash-2"></i> Clear Data
+            </button>
+            <button class="btn btn-sm btn-footer" id="btnFooterUpload" title="Upload new CSV file">
+              <i data-lucide="upload-cloud"></i> Upload CSV
+            </button>
+            <button class="btn btn-sm btn-footer" id="btnFooterScrollTop" title="Scroll to top of dashboard">
+              <i data-lucide="arrow-up"></i> Back to Top
+            </button>
+          </div>
+        </div>
+        <div class="footer-copyright">
+          <span>&copy; 2026 Sales &amp; Item Analytics BI. All rights reserved.</span>
+          <span>Crafted by <a href="https://manohar.marketingub.in/" target="_blank" rel="noopener noreferrer">Mano Rajput</a> &bull; Portfolio: <a href="https://manohar.marketingub.in/" target="_blank" rel="noopener noreferrer">manohar.marketingub.in</a></span>
+        </div>
+      </div>
+    </div>
+  </footer>
 
   <!-- =========================================================================
        MODAL 1: ITEM DETAIL VIEW (With Monthly Performance & Trajectory Chart)

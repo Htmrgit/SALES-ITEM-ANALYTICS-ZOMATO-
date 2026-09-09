@@ -99,19 +99,223 @@ function hideToast() {
 }
 
 /* ==========================================================================
+   PERSISTENCE LAYER (IndexedDB + localStorage Fallback)
+   Ensures uploaded CSV persists on browser refresh ("REFRARCE BROSWER CLEAR NA")
+   ========================================================================== */
+const DB_NAME = 'SalesAnalyticsBI_DB';
+const DB_VERSION = 1;
+const STORE_NAME = 'dataset_store';
+const KEY_ACTIVE_DATASET = 'current_active_dataset';
+
+function openIndexedDbStore() {
+  return new Promise((resolve) => {
+    if (!window.indexedDB) {
+      resolve(null);
+      return;
+    }
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+      request.onsuccess = (event) => resolve(event.target.result);
+      request.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+async function persistDatasetToStorage(csvText, fileName) {
+  try {
+    const db = await openIndexedDbStore();
+    if (db) {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put({ csvText, fileName, updated: Date.now() }, KEY_ACTIVE_DATASET);
+      return true;
+    }
+  } catch (e) {
+    console.warn('IndexedDB write error, trying localStorage fallback:', e);
+  }
+
+  try {
+    localStorage.setItem('sales_dash_csv_text', csvText);
+    localStorage.setItem('sales_dash_file_name', fileName);
+    return true;
+  } catch (e) {
+    console.warn('Storage quota exceeded or error:', e);
+    return false;
+  }
+}
+
+async function retrieveDatasetFromStorage() {
+  try {
+    const db = await openIndexedDbStore();
+    if (db) {
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(KEY_ACTIVE_DATASET);
+        req.onsuccess = (e) => resolve(e.target.result || null);
+        req.onerror = () => resolve(null);
+      });
+    }
+  } catch (e) {
+    console.warn('IndexedDB read error, trying fallback:', e);
+  }
+
+  try {
+    const text = localStorage.getItem('sales_dash_csv_text');
+    const name = localStorage.getItem('sales_dash_file_name');
+    if (text) {
+      return { csvText: text, fileName: name || 'saved_sales.csv' };
+    }
+  } catch (e) {}
+
+  return null;
+}
+
+async function removeDatasetFromStorage() {
+  try {
+    const db = await openIndexedDbStore();
+    if (db) {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(KEY_ACTIVE_DATASET);
+    }
+  } catch (e) {}
+
+  try {
+    localStorage.removeItem('sales_dash_csv_text');
+    localStorage.removeItem('sales_dash_file_name');
+  } catch (e) {}
+}
+
+/* ==========================================================================
    DATA LOADING & FILE HANDLING
    ========================================================================== */
 async function loadInitialDataset() {
-  showToast('Analyzing Punjabi Chulha sales data...', true);
+  // Check if user explicitly clicked "Clear Data"
+  const isExplicitlyCleared = localStorage.getItem('sales_dash_cleared') === 'true';
+  if (isExplicitlyCleared) {
+    clearAllData(false);
+    return;
+  }
+
+  // Check if there is previously uploaded/active CSV dataset in storage
+  const saved = await retrieveDatasetFromStorage();
+  if (saved && saved.csvText) {
+    showToast(`Restoring ${saved.fileName || 'saved sales dataset'}...`, true);
+    processCsvText(saved.csvText, saved.fileName || 'uploaded_sales.csv', false);
+    return;
+  }
+
+  // Otherwise, load Punjabi Chulha default sample
+  await loadSampleDataset();
+}
+
+async function loadSampleDataset() {
+  showToast('Loading Punjabi Chulha 6-Month dataset...', true);
   try {
     const response = await fetch('/punjabi_chulha_sales.csv');
     if (!response.ok) throw new Error('File fetch failed');
     const csvText = await response.text();
-    processCsvText(csvText, 'punjabi_chulha_sales.csv');
+    localStorage.removeItem('sales_dash_cleared');
+    await persistDatasetToStorage(csvText, 'punjabi_chulha_sales.csv');
+    processCsvText(csvText, 'punjabi_chulha_sales.csv', false);
   } catch (err) {
-    console.warn('Initial fetch failed, ready for manual upload', err);
+    console.warn('Initial sample fetch failed, ready for manual upload', err);
+    clearAllData(false);
     hideToast();
   }
+}
+
+async function clearAllData(confirmFirst = true) {
+  if (confirmFirst) {
+    const confirmed = window.confirm('Are you sure you want to clear all loaded data? The dashboard will be reset to a clean blank state.');
+    if (!confirmed) return;
+  }
+
+  // Mark as explicitly cleared and remove stored dataset
+  localStorage.setItem('sales_dash_cleared', 'true');
+  await removeDatasetFromStorage();
+
+  // Reset internal state
+  appState.rawRows = [];
+  appState.normalizedRecords = [];
+  appState.filteredRecords = [];
+  appState.availableMonths = [];
+  appState.last6Months = [];
+  appState.latestMonth = '';
+  appState.previousMonth = '';
+  appState.mappedColumns = {};
+  appState.fileName = 'None (Cleared)';
+
+  // Reset filters
+  resetFiltersState();
+
+  // Reset file input element so re-selecting same file works
+  const fileInput = document.getElementById('csvFileInput');
+  if (fileInput) fileInput.value = '';
+
+  // Destroy all active charts
+  if (appState.charts.monthlyTrend) {
+    appState.charts.monthlyTrend.destroy();
+    appState.charts.monthlyTrend = null;
+  }
+  if (appState.charts.topItems) {
+    appState.charts.topItems.destroy();
+    appState.charts.topItems = null;
+  }
+  if (appState.charts.categoryShare) {
+    appState.charts.categoryShare.destroy();
+    appState.charts.categoryShare = null;
+  }
+  if (appState.charts.modalTrajectory) {
+    appState.charts.modalTrajectory.destroy();
+    appState.charts.modalTrajectory = null;
+  }
+
+  // Clear canvases
+  ['chartMonthlyTrend', 'chartTopSellingItems', 'chartCategoryShare', 'chartItemModalTrajectory'].forEach((id) => {
+    const cvs = document.getElementById(id);
+    if (cvs) {
+      const ctx = cvs.getContext('2d');
+      ctx.clearRect(0, 0, cvs.width, cvs.height);
+    }
+  });
+
+  // Reset specs UI
+  document.getElementById('valFileName').textContent = 'None';
+  document.getElementById('valFormatType').textContent = '-';
+  document.getElementById('valTotalRows').textContent = '0';
+  document.getElementById('valTotalCols').textContent = '0';
+  document.getElementById('valCurrency').textContent = '₹';
+  document.getElementById('activeDatasetLabel').textContent = 'No active data loaded (Cleared)';
+  document.getElementById('valDataPeriod').textContent = 'No Data';
+  document.getElementById('valLastUpdated').textContent = 'Cleared';
+  document.getElementById('subGrowingPeriod').textContent = 'No data available';
+  document.getElementById('subDecliningPeriod').textContent = 'No data available';
+
+  // Empty dropdown selects
+  populateFilterDropdowns();
+
+  // Render KPIs & empty tables
+  applyFiltersAndRender();
+
+  // Expand upload drawer so user can drop/browse a new CSV
+  const uploadSection = document.getElementById('uploadSection');
+  if (uploadSection && uploadSection.classList.contains('collapsed')) {
+    uploadSection.classList.remove('collapsed');
+    const label = document.getElementById('uploadToggleLabel');
+    const icon = document.getElementById('uploadChevronIcon');
+    if (label) label.textContent = 'Hide Upload Box';
+    if (icon) icon.setAttribute('data-lucide', 'chevron-up');
+    initIcons();
+  }
+
+  showToast('Sales data cleared. Ready for new CSV upload.');
 }
 
 function setupEventListeners() {
@@ -155,11 +359,31 @@ function setupEventListeners() {
   }
 
   if (btnSample) {
-    btnSample.addEventListener('click', (e) => {
+    btnSample.addEventListener('click', async (e) => {
       e.stopPropagation();
-      loadInitialDataset();
+      await loadSampleDataset();
     });
   }
+
+  // Clear Data Actions (Header, Drawer, Footer)
+  const handleClearDataClick = () => clearAllData(true);
+  document.getElementById('btnClearAllData')?.addEventListener('click', handleClearDataClick);
+  document.getElementById('btnClearDataDrawer')?.addEventListener('click', handleClearDataClick);
+  document.getElementById('btnFooterClearData')?.addEventListener('click', handleClearDataClick);
+
+  // Footer Actions
+  document.getElementById('btnFooterUpload')?.addEventListener('click', () => {
+    const uploadSection = document.getElementById('uploadSection');
+    if (uploadSection && uploadSection.classList.contains('collapsed')) {
+      toggleUploadDrawer();
+    }
+    uploadSection?.scrollIntoView({ behavior: 'smooth' });
+    fileInput?.click();
+  });
+
+  document.getElementById('btnFooterScrollTop')?.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   // Upload drawer toggle
   const uploadHeaderBar = document.getElementById('uploadHeaderBar');
@@ -364,43 +588,66 @@ function setupEventListeners() {
   setupTableSortListeners();
 }
 
-function handleFileSelect(file) {
+async function handleFileSelect(file) {
   if (!file) return;
+
+  // Clear previous dataset, filters and remove explicit cleared flag
+  resetFiltersState();
+  localStorage.removeItem('sales_dash_cleared');
+
   appState.fileName = file.name;
-  showToast(`Parsing ${file.name}...`, true);
+  showToast(`Uploading and analyzing ${file.name}...`, true);
 
   const progressBox = document.getElementById('uploadProgressBox');
   const progressBar = document.getElementById('progressBarFill');
   if (progressBox) progressBox.classList.add('show');
-  if (progressBar) progressBar.style.width = '40%';
+  if (progressBar) progressBar.style.width = '35%';
 
-  Papa.parse(file, {
-    header: true,
-    dynamicTyping: false,
-    skipEmptyLines: 'greedy',
-    complete: (results) => {
-      if (progressBar) progressBar.style.width = '90%';
-      setTimeout(() => {
+  try {
+    const csvText = await file.text();
+    if (progressBar) progressBar.style.width = '70%';
+
+    // Persist to storage so refresh preserves it
+    await persistDatasetToStorage(csvText, file.name);
+
+    if (progressBar) progressBar.style.width = '90%';
+
+    Papa.parse(csvText, {
+      header: true,
+      dynamicTyping: false,
+      skipEmptyLines: 'greedy',
+      complete: (results) => {
         if (progressBar) progressBar.style.width = '100%';
         processParsedData(results.data, results.meta.fields, file.name);
         setTimeout(() => progressBox?.classList.remove('show'), 500);
-      }, 200);
-    },
-    error: (error) => {
-      console.error('CSV Parsing Error:', error);
-      showToast('Error reading CSV file. Please check format.');
-      progressBox?.classList.remove('show');
-    }
-  });
+      },
+      error: (error) => {
+        console.error('CSV Parsing Error:', error);
+        showToast('Error reading CSV file. Please check format.');
+        progressBox?.classList.remove('show');
+      }
+    });
+  } catch (err) {
+    console.error('File read error:', err);
+    showToast('Failed to read CSV file.');
+    progressBox?.classList.remove('show');
+  }
 }
 
-function processCsvText(csvText, fileName) {
+function processCsvText(csvText, fileName, persist = false) {
+  if (persist) {
+    persistDatasetToStorage(csvText, fileName);
+  }
   Papa.parse(csvText, {
     header: true,
     dynamicTyping: false,
     skipEmptyLines: 'greedy',
     complete: (results) => {
       processParsedData(results.data, results.meta.fields, fileName);
+    },
+    error: (err) => {
+      console.error('CSV Parsing Error:', err);
+      showToast('Error parsing CSV data.');
     }
   });
 }
@@ -715,7 +962,7 @@ function populateSelect(selectId, items, defaultLabel) {
   });
 }
 
-function resetAllFilters() {
+function resetFiltersState() {
   appState.filters = {
     search: '',
     month: 'ALL',
@@ -736,6 +983,10 @@ function resetAllFilters() {
 
   appState.pagination.itemDirectory.page = 1;
   appState.pagination.rawData.page = 1;
+}
+
+function resetAllFilters() {
+  resetFiltersState();
   applyFiltersAndRender();
   showToast('Filters reset.');
 }
@@ -806,6 +1057,26 @@ function renderKpis() {
   const records = appState.filteredRecords;
   const sym = appState.currencySymbol;
 
+  if (records.length === 0) {
+    document.getElementById('valKpiSales').textContent = `${sym}0.00`;
+    document.getElementById('valKpiQuantity').textContent = '0';
+    document.getElementById('valKpiOrders').textContent = '0';
+    document.getElementById('valKpiAov').textContent = `${sym}0.00`;
+    document.getElementById('valKpiItems').textContent = '0';
+    document.getElementById('valKpiBrands').textContent = '0';
+    document.getElementById('valKpiCategories').textContent = '0';
+    document.getElementById('valKpiAvgMonthlySales').textContent = `${sym}0.00`;
+    const pill = document.getElementById('kpiSalesGrowthPill');
+    if (pill) {
+      pill.className = 'growth-pill';
+      pill.innerHTML = '<i data-lucide="minus" style="width: 12px; height: 12px;"></i> MoM: 0.0%';
+    }
+    const qtyPill = document.getElementById('kpiQtyGrowthPill');
+    if (qtyPill) qtyPill.textContent = 'MoM: 0.0%';
+    initIcons();
+    return;
+  }
+
   let totalSales = 0;
   let totalQty = 0;
   let totalOrders = 0;
@@ -849,6 +1120,7 @@ function renderKpis() {
   document.getElementById('kpiTotalCategories').style.display = uniqueCategories.size > 0 ? 'flex' : 'none';
   document.getElementById('kpiTotalOrders').style.display = totalOrders > 0 ? 'flex' : 'none';
   document.getElementById('kpiAvgOrderValue').style.display = totalOrders > 0 ? 'flex' : 'none';
+  initIcons();
 }
 
 function calculateLatestMoMGrowth() {
@@ -883,6 +1155,18 @@ function renderLast6MonthsMoMTable() {
   const tbody = document.getElementById('tbodyLast6Months');
   if (!tbody) return;
   tbody.innerHTML = '';
+
+  if (appState.last6Months.length === 0 || appState.filteredRecords.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center" style="padding: 2.5rem 1rem; color: #94a3b8; text-align: center;">
+          <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">No Monthly Data Available</div>
+          <div style="font-size: 0.82rem;">Upload a sales CSV file or click "Reload Punjabi Chulha 6-Mo Data" to display metrics.</div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
 
   const sym = appState.currencySymbol;
   const monthData = [];
@@ -955,6 +1239,16 @@ function renderMonthlyTrendChart() {
   const months = appState.last6Months;
   const metric = appState.trendMetric;
   const sym = appState.currencySymbol;
+
+  if (months.length === 0 || appState.filteredRecords.length === 0) {
+    if (appState.charts.monthlyTrend) {
+      appState.charts.monthlyTrend.destroy();
+      appState.charts.monthlyTrend = null;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
 
   const dataPoints = [];
   const backgroundColors = [];
@@ -1153,6 +1447,19 @@ function renderTopSellingItemsSection() {
   const tbody = document.getElementById('tbodyTopSellingItems');
   if (!tbody) return;
 
+  if (items.length === 0 || appState.filteredRecords.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" class="text-center" style="padding: 2.5rem 1rem; color: #94a3b8; text-align: center;">
+          <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">No Items Available</div>
+          <div style="font-size: 0.82rem;">Upload a sales CSV file or adjust your search filter.</div>
+        </td>
+      </tr>
+    `;
+    renderTopItemsHorizontalBar([]);
+    return;
+  }
+
   // Sorting
   const { key, dir } = appState.sort.topItems;
   items.sort((a, b) => {
@@ -1217,6 +1524,16 @@ function renderTopItemsHorizontalBar(topItems) {
   const canvas = document.getElementById('chartTopSellingItems');
   if (!canvas) return;
 
+  if (!topItems || topItems.length === 0) {
+    if (appState.charts.topItems) {
+      appState.charts.topItems.destroy();
+      appState.charts.topItems = null;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
   const sym = appState.currencySymbol;
   const labels = topItems.map((it) => it.item.length > 24 ? it.item.slice(0, 22) + '...' : it.item);
   const data = topItems.map((it) => Math.round(it.sales));
@@ -1276,6 +1593,18 @@ function renderMonthWiseTopItemsTable() {
   const selectedMonth = appState.monthWiseSelectedMonth;
   const sym = appState.currencySymbol;
   const targetMonths = selectedMonth === 'ALL' ? appState.last6Months : [selectedMonth];
+
+  if (targetMonths.length === 0 || appState.filteredRecords.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center" style="padding: 2.5rem 1rem; color: #94a3b8; text-align: center;">
+          <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">No Month-Wise Records</div>
+          <div style="font-size: 0.82rem;">Upload a sales CSV to inspect monthly item rankings.</div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
 
   targetMonths.forEach((month) => {
     // Collect item totals for this specific month
@@ -1359,6 +1688,26 @@ function renderItemDirectoryTable() {
   // Pagination
   const { page, perPage } = appState.pagination.itemDirectory;
   const totalItems = items.length;
+
+  if (totalItems === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="11" class="text-center" style="padding: 2.5rem 1rem; color: #94a3b8; text-align: center;">
+          <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">No Items Found in Directory</div>
+          <div style="font-size: 0.82rem;">Upload a sales CSV file or reset filters to inspect items.</div>
+        </td>
+      </tr>
+    `;
+    document.getElementById('paginationInfoText').textContent = 'Showing 0 items';
+    const prevBtn = document.getElementById('btnPagePrev');
+    const nextBtn = document.getElementById('btnPageNext');
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+    const numContainer = document.getElementById('pageNumberButtons');
+    if (numContainer) numContainer.innerHTML = '';
+    return;
+  }
+
   const totalPages = Math.ceil(totalItems / perPage) || 1;
   const start = (page - 1) * perPage;
   const end = Math.min(start + perPage, totalItems);
@@ -1499,31 +1848,39 @@ function renderGrowthAnalysisCards() {
 
   // Render Growing Table
   tbodyGrowing.innerHTML = '';
-  growing.slice(0, 10).forEach((it) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><a class="item-link" data-item="${escapeHtml(it.item)}">${escapeHtml(it.item)}</a></td>
-      <td class="num">${sym}${formatMoney(it.prevSales)}</td>
-      <td class="num bold-num">${sym}${formatMoney(it.currSales)}</td>
-      <td class="num" style="color: var(--color-growth); font-weight: 700;">+${sym}${formatMoney(it.diff)}</td>
-      <td class="num"><span class="growth-pill positive">+${it.pct.toFixed(1)}%</span></td>
-    `;
-    tbodyGrowing.appendChild(tr);
-  });
+  if (growing.length === 0) {
+    tbodyGrowing.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: 1.5rem; color: #94a3b8; text-align: center;">No growing items detected.</td></tr>';
+  } else {
+    growing.slice(0, 10).forEach((it) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><a class="item-link" data-item="${escapeHtml(it.item)}">${escapeHtml(it.item)}</a></td>
+        <td class="num">${sym}${formatMoney(it.prevSales)}</td>
+        <td class="num bold-num">${sym}${formatMoney(it.currSales)}</td>
+        <td class="num" style="color: var(--color-growth); font-weight: 700;">+${sym}${formatMoney(it.diff)}</td>
+        <td class="num"><span class="growth-pill positive">+${it.pct.toFixed(1)}%</span></td>
+      `;
+      tbodyGrowing.appendChild(tr);
+    });
+  }
 
   // Render Declining Table
   tbodyDeclining.innerHTML = '';
-  declining.slice(0, 10).forEach((it) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><a class="item-link" data-item="${escapeHtml(it.item)}">${escapeHtml(it.item)}</a></td>
-      <td class="num">${sym}${formatMoney(it.prevSales)}</td>
-      <td class="num bold-num">${sym}${formatMoney(it.currSales)}</td>
-      <td class="num" style="color: var(--color-decline); font-weight: 700;">-${sym}${formatMoney(it.diff)}</td>
-      <td class="num"><span class="growth-pill negative">-${it.pct.toFixed(1)}%</span></td>
-    `;
-    tbodyDeclining.appendChild(tr);
-  });
+  if (declining.length === 0) {
+    tbodyDeclining.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: 1.5rem; color: #94a3b8; text-align: center;">No declining items detected.</td></tr>';
+  } else {
+    declining.slice(0, 10).forEach((it) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><a class="item-link" data-item="${escapeHtml(it.item)}">${escapeHtml(it.item)}</a></td>
+        <td class="num">${sym}${formatMoney(it.prevSales)}</td>
+        <td class="num bold-num">${sym}${formatMoney(it.currSales)}</td>
+        <td class="num" style="color: var(--color-decline); font-weight: 700;">-${sym}${formatMoney(it.diff)}</td>
+        <td class="num"><span class="growth-pill negative">-${it.pct.toFixed(1)}%</span></td>
+      `;
+      tbodyDeclining.appendChild(tr);
+    });
+  }
 
   document.querySelectorAll('#tbodyTopGrowing .item-link, #tbodyTopDeclining .item-link').forEach((el) => {
     el.addEventListener('click', (e) => {
@@ -1563,33 +1920,37 @@ function renderCategoryAndBrandAnalysis() {
   const tbodyCat = document.getElementById('tbodyCategoryAnalysis');
   if (tbodyCat) {
     tbodyCat.innerHTML = '';
-    catArray.forEach((c) => {
-      const share = totalSales > 0 ? (c.sales / totalSales) * 100 : 0;
-      let momGrowth = 0;
-      if (c.prevSales > 0) momGrowth = ((c.latestSales - c.prevSales) / c.prevSales) * 100;
-      const gClass = momGrowth > 0 ? 'positive' : momGrowth < 0 ? 'negative' : 'stable';
+    if (catArray.length === 0) {
+      tbodyCat.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: #94a3b8; text-align: center;">No category data available.</td></tr>';
+    } else {
+      catArray.forEach((c) => {
+        const share = totalSales > 0 ? (c.sales / totalSales) * 100 : 0;
+        let momGrowth = 0;
+        if (c.prevSales > 0) momGrowth = ((c.latestSales - c.prevSales) / c.prevSales) * 100;
+        const gClass = momGrowth > 0 ? 'positive' : momGrowth < 0 ? 'negative' : 'stable';
 
-      const tr = document.createElement('tr');
-      tr.style.cursor = 'pointer';
-      tr.title = 'Click to filter dashboard by this category';
-      tr.innerHTML = `
-        <td><strong>${escapeHtml(c.category)}</strong></td>
-        <td class="num bold-num">${sym}${formatMoney(c.sales)}</td>
-        <td class="num">${c.qty.toLocaleString()}</td>
-        <td class="num">${c.orders.toLocaleString()}</td>
-        <td class="num">${share.toFixed(1)}%</td>
-        <td class="num"><span class="growth-pill ${gClass}">${momGrowth >= 0 ? '+' : ''}${momGrowth.toFixed(1)}%</span></td>
-      `;
-      tr.addEventListener('click', () => {
-        const catSelect = document.getElementById('filterCategory');
-        if (catSelect) {
-          catSelect.value = c.category;
-          appState.filters.category = c.category;
-          applyFiltersAndRender();
-        }
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.title = 'Click to filter dashboard by this category';
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(c.category)}</strong></td>
+          <td class="num bold-num">${sym}${formatMoney(c.sales)}</td>
+          <td class="num">${c.qty.toLocaleString()}</td>
+          <td class="num">${c.orders.toLocaleString()}</td>
+          <td class="num">${share.toFixed(1)}%</td>
+          <td class="num"><span class="growth-pill ${gClass}">${momGrowth >= 0 ? '+' : ''}${momGrowth.toFixed(1)}%</span></td>
+        `;
+        tr.addEventListener('click', () => {
+          const catSelect = document.getElementById('filterCategory');
+          if (catSelect) {
+            catSelect.value = c.category;
+            appState.filters.category = c.category;
+            applyFiltersAndRender();
+          }
+        });
+        tbodyCat.appendChild(tr);
       });
-      tbodyCat.appendChild(tr);
-    });
+    }
   }
 
   // Render Category Doughnut Chart
@@ -1625,41 +1986,55 @@ function renderCategoryAndBrandAnalysis() {
   const tbodyBrand = document.getElementById('tbodyBrandAnalysis');
   if (tbodyBrand) {
     tbodyBrand.innerHTML = '';
-    brandArray.forEach((b) => {
-      const share = totalSales > 0 ? (b.sales / totalSales) * 100 : 0;
-      let momGrowth = 0;
-      if (b.prevSales > 0) momGrowth = ((b.latestSales - b.prevSales) / b.prevSales) * 100;
-      const gClass = momGrowth > 0 ? 'positive' : momGrowth < 0 ? 'negative' : 'stable';
+    if (brandArray.length === 0) {
+      tbodyBrand.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: #94a3b8; text-align: center;">No brand/outlet data available.</td></tr>';
+    } else {
+      brandArray.forEach((b) => {
+        const share = totalSales > 0 ? (b.sales / totalSales) * 100 : 0;
+        let momGrowth = 0;
+        if (b.prevSales > 0) momGrowth = ((b.latestSales - b.prevSales) / b.prevSales) * 100;
+        const gClass = momGrowth > 0 ? 'positive' : momGrowth < 0 ? 'negative' : 'stable';
 
-      const tr = document.createElement('tr');
-      tr.style.cursor = 'pointer';
-      tr.title = 'Click to filter dashboard by this brand';
-      tr.innerHTML = `
-        <td><strong>${escapeHtml(b.brand)}</strong></td>
-        <td>${escapeHtml(b.outlet)}</td>
-        <td>${escapeHtml(b.city || 'Delhi NCR')}</td>
-        <td class="num bold-num">${sym}${formatMoney(b.sales)}</td>
-        <td class="num">${b.qty.toLocaleString()}</td>
-        <td class="num">${b.orders.toLocaleString()}</td>
-        <td class="num">${share.toFixed(1)}%</td>
-        <td class="num"><span class="growth-pill ${gClass}">${momGrowth >= 0 ? '+' : ''}${momGrowth.toFixed(1)}%</span></td>
-      `;
-      tr.addEventListener('click', () => {
-        const brandSel = document.getElementById('filterBrand');
-        if (brandSel) {
-          brandSel.value = b.brand;
-          appState.filters.brand = b.brand;
-          applyFiltersAndRender();
-        }
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.title = 'Click to filter dashboard by this brand';
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(b.brand)}</strong></td>
+          <td>${escapeHtml(b.outlet)}</td>
+          <td>${escapeHtml(b.city || 'Delhi NCR')}</td>
+          <td class="num bold-num">${sym}${formatMoney(b.sales)}</td>
+          <td class="num">${b.qty.toLocaleString()}</td>
+          <td class="num">${b.orders.toLocaleString()}</td>
+          <td class="num">${share.toFixed(1)}%</td>
+          <td class="num"><span class="growth-pill ${gClass}">${momGrowth >= 0 ? '+' : ''}${momGrowth.toFixed(1)}%</span></td>
+        `;
+        tr.addEventListener('click', () => {
+          const brandSel = document.getElementById('filterBrand');
+          if (brandSel) {
+            brandSel.value = b.brand;
+            appState.filters.brand = b.brand;
+            applyFiltersAndRender();
+          }
+        });
+        tbodyBrand.appendChild(tr);
       });
-      tbodyBrand.appendChild(tr);
-    });
+    }
   }
 }
 
 function renderCategoryDoughnutChart(catArray) {
   const canvas = document.getElementById('chartCategoryShare');
   if (!canvas) return;
+
+  if (!catArray || catArray.length === 0) {
+    if (appState.charts.categoryShare) {
+      appState.charts.categoryShare.destroy();
+      appState.charts.categoryShare = null;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
 
   const topCats = catArray.slice(0, 6);
   const labels = topCats.map((c) => c.category);
@@ -1730,6 +2105,25 @@ function renderRawDataExplorer() {
 
   const { page, perPage } = appState.pagination.rawData;
   const total = records.length;
+
+  if (total === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" class="text-center" style="padding: 2.5rem 1rem; color: #94a3b8; text-align: center;">
+          <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">No Raw Records Available</div>
+          <div style="font-size: 0.82rem;">Upload a sales CSV file or adjust filter parameters.</div>
+        </td>
+      </tr>
+    `;
+    document.getElementById('paginationRawInfoText').textContent = 'Showing 0 records';
+    document.getElementById('txtRawPageIndicator').textContent = 'Page 1 of 1';
+    const prevBtn = document.getElementById('btnRawPrev');
+    const nextBtn = document.getElementById('btnRawNext');
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+    return;
+  }
+
   const totalPages = Math.ceil(total / perPage) || 1;
   const start = (page - 1) * perPage;
   const end = Math.min(start + perPage, total);
