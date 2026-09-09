@@ -1,0 +1,6 @@
+{
+  "name": "CSV Sales Analytics Dashboard",
+  "description": "Professional in-browser sales and item performance analytics dashboard with automatic CSV column detection, 6-month trend analysis, and comprehensive reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

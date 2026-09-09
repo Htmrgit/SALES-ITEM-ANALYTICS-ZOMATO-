@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales & Item Analytics | Last 6 Months Performance Dashboard</title>
+  <meta name="description" content="Complete modern CSV Sales Analytics Dashboard for multi-month business and item performance analysis with intelligent column mapping and reporting." />
+  <meta property="og:title" content="Sales & Item Analytics | Last 6 Months Performance Dashboard" />
+  <meta property="og:description" content="Complete modern CSV Sales Analytics Dashboard for multi-month business and item performance analysis with intelligent column mapping and reporting." />
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="./style.css">
+  
+  <!-- External CDN Libraries: PapaParse, Chart.js, Lucide Icons, jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- =========================================================================
+       APPLICATION HEADER
+       ========================================================================= -->
+  <header class="app-header" id="appHeader">
+    <div class="header-container">
+      <div class="header-top">
+        <div class="branding-box" id="brandingBox">
+          <div class="brand-icon" id="brandIcon">
+            <i data-lucide="bar-chart-3"></i>
+          </div>
+          <div class="title-group" id="titleGroup">
+            <h1>SALES & ITEM ANALYTICS <span class="bi-badge" id="biBadge">BI Dashboard</span></h1>
+            <p>Last 6 Months Performance Dashboard</p>
+          </div>
+        </div>
+
+        <!-- Action Toolbar -->
+        <div class="header-actions" id="headerActions">
+          <button class="btn btn-header" id="btnRefreshData" title="Recompute and refresh metrics">
+            <i data-lucide="rotate-cw"></i> Refresh Data
+          </button>
+          <button class="btn btn-header" id="btnResetFilters" title="Reset all search and dropdown filters">
+            <i data-lucide="filter-x"></i> Reset Filters
+          </button>
+          
+          <!-- CSV Export Dropdown -->
+          <div class="dropdown-wrapper" id="exportDropdownWrapper">
+            <button class="btn btn-header" id="btnExportMenuToggle">
+              <i data-lucide="download"></i> Export CSV <i data-lucide="chevron-down"></i>
+            </button>
+            <div class="dropdown-menu" id="exportDropdownMenu">
+              <div class="dropdown-header">Available CSV Reports</div>
+              <button class="dropdown-item" data-export="filtered">
+                <i data-lucide="file-spreadsheet"></i> Download Filtered Data
+              </button>
+              <button class="dropdown-item" data-export="top-items">
+                <i data-lucide="trophy"></i> Download Top Selling Items
+              </button>
+              <button class="dropdown-item" data-export="monthly">
+                <i data-lucide="calendar"></i> Download Monthly Sales
+              </button>
+              <button class="dropdown-item" data-export="performance">
+                <i data-lucide="activity"></i> Download Item Performance
+              </button>
+              <button class="dropdown-item" data-export="brand">
+                <i data-lucide="store"></i> Download Brand Report
+              </button>
+              <button class="dropdown-item" data-export="category">
+                <i data-lucide="layout-grid"></i> Download Category Report
+              </button>
+              <button class="dropdown-item" data-export="growth">
+                <i data-lucide="trending-up"></i> Download Growth Report
+              </button>
+              <button class="dropdown-item" data-export="month-wise-top">
+                <i data-lucide="list-ordered"></i> Download Month-wise Top Items
+              </button>
+            </div>
+          </div>
+
+          <!-- Download Report Button -->
+          <button class="btn btn-header-accent" id="btnOpenReportModal">
+            <i data-lucide="file-text"></i> Download Report
+          </button>
+
+          <!-- Toggle Upload Section Button -->
+          <button class="btn btn-header" id="btnToggleUploadDrawer" title="Upload new CSV file">
+            <i data-lucide="upload-cloud"></i> Upload CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Metadata & Filter Status Bar -->
+      <div class="header-meta-row" id="headerMetaRow">
+        <div class="meta-badges" id="metaBadges">
+          <div class="meta-pill highlight" id="metaPeriod">
+            <i data-lucide="calendar-range"></i> Period: <strong id="valDataPeriod">Detecting...</strong>
+          </div>
+          <div class="meta-pill" id="metaUpdated">
+            <i data-lucide="clock"></i> Last Updated: <strong id="valLastUpdated">Just now</strong>
+          </div>
+          <div class="meta-pill" id="metaRecords">
+            <i data-lucide="database"></i> Total Records: <strong id="valTotalRecords">0</strong>
+          </div>
+          <div class="meta-pill" id="metaActiveFilters">
+            <i data-lucide="filter"></i> Active Filters: <strong id="valActiveFilters">None (Showing All)</strong>
+          </div>
+        </div>
+
+        <div class="meta-right-note" id="datasetNotice">
+          <span style="color: #94a3b8; font-size: 0.78rem;" id="activeDatasetLabel">Active: Punjabi Chulha 6-Mo Dataset</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       MAIN CONTENT CONTAINER
+       ========================================================================= -->
+  <main class="main-container" id="mainContainer">
+
+    <!-- =======================================================================
+         SECTION: CSV UPLOAD & DRAG/DROP DRAWER
+         ======================================================================= -->
+    <section class="upload-section" id="uploadSection">
+      <div class="upload-header-bar" id="uploadHeaderBar">
+        <div class="upload-header-left">
+          <div class="status-indicator ready" id="uploadStatusDot"></div>
+          <div>
+            <span class="upload-title" id="uploadTitle">CSV Data Engine & Upload Manager</span>
+            <span class="upload-meta-summary" id="uploadSummaryText"> — Loaded from restaurant POS ledger with 6-month metrics</span>
+          </div>
+        </div>
+        <div class="upload-actions">
+          <button class="btn btn-sm btn-secondary" id="btnToggleUploadInner">
+            <i data-lucide="chevron-up" id="uploadChevronIcon"></i> <span id="uploadToggleLabel">Hide Upload Box</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="upload-body" id="uploadBody">
+        <div class="dropzone-container" id="dropzoneContainer">
+          <input type="file" id="csvFileInput" accept=".csv, text/csv, application/vnd.ms-excel" style="display: none;">
+          <div class="dropzone-icon">
+            <i data-lucide="upload-cloud" style="width: 28px; height: 28px;"></i>
+          </div>
+          <div class="dropzone-content">
+            <h3>Drag &amp; Drop your CSV file here</h3>
+            <p>Supports Matrix/Pivot reports (with metrics &amp; monthly columns) as well as standard row-based transactional sales CSVs.</p>
+            <div class="dropzone-quick-actions">
+              <button class="btn btn-primary" id="btnBrowseCsv">
+                <i data-lucide="folder-open"></i> Browse CSV File
+              </button>
+              <button class="btn btn-secondary" id="btnLoadSampleData">
+                <i data-lucide="sparkles"></i> Reload Punjabi Chulha 6-Mo Data
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="upload-progress-box" id="uploadProgressBox">
+          <div class="progress-info">
+            <span id="progressStatusText">Analyzing your sales data...</span>
+            <span id="progressPercentText">100%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+          </div>
+        </div>
+
+        <!-- File Analysis Specs & Mapped Columns Display -->
+        <div class="file-analysis-card" id="fileAnalysisCard">
+          <div class="file-specs">
+            <div class="spec-item">
+              <span class="spec-label">File Name</span>
+              <span class="spec-value" id="valFileName">punjabi_chulha_sales.csv</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Format Type</span>
+              <span class="spec-value" id="valFormatType">Matrix / Pivot by Metric</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Total Rows</span>
+              <span class="spec-value" id="valTotalRows">415</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Total Columns</span>
+              <span class="spec-value" id="valTotalCols">14</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Detected Currency</span>
+              <span class="spec-value" id="valCurrency">₹ (INR)</span>
+            </div>
+          </div>
+
+          <!-- Mapped Tags -->
+          <div class="column-tags" id="columnTagsContainer">
+            <span class="col-tag mapped" title="Mapped Item column"><i data-lucide="check" style="width: 12px; height: 12px; display: inline;"></i> Item: Item name</span>
+            <span class="col-tag mapped" title="Mapped Category column"><i data-lucide="check" style="width: 12px; height: 12px; display: inline;"></i> Category: Item category</span>
+            <span class="col-tag mapped" title="Mapped Metric dimension"><i data-lucide="check" style="width: 12px; height: 12px; display: inline;"></i> Metric: Metric</span>
+            <span class="col-tag mapped" title="Detected Months"><i data-lucide="check" style="width: 12px; height: 12px; display: inline;"></i> Months: March – August</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         SECTION: GLOBAL FILTER & SEARCH PANEL
+         ======================================================================= -->
+    <section class="filter-toolbar" id="filterToolbar">
+      <div class="filter-top-row">
+        <!-- Global Search Box -->
+        <div class="search-box-wrapper">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="globalSearchInput" class="search-input" placeholder="Global search items, categories, brands, outlets, subzones..." />
+          <button id="searchClearBtn" class="search-clear" title="Clear search">
+            <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+          </button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span class="filter-badge-counter" id="filterCountBadge">
+            <i data-lucide="sliders-horizontal" style="width: 14px; height: 14px;"></i>
+            <span id="filterCountText">All 6 Months Active</span>
+          </span>
+          <button class="btn btn-sm btn-secondary" id="btnQuickClearAllFilters">
+            <i data-lucide="x"></i> Clear All Filters
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter Controls Row -->
+      <div class="filter-controls-row" id="filterControlsRow">
+        <!-- Month Filter -->
+        <div class="filter-group">
+          <label class="filter-label" for="filterMonth">Month</label>
+          <select id="filterMonth" class="select-control">
+            <option value="ALL">All Last 6 Months</option>
+          </select>
+        </div>
+
+        <!-- Category Filter -->
+        <div class="filter-group" id="filterGroupCategory">
+          <label class="filter-label" for="filterCategory">Category</label>
+          <select id="filterCategory" class="select-control">
+            <option value="ALL">All Categories</option>
+          </select>
+        </div>
+
+        <!-- Brand / Restaurant Filter -->
+        <div class="filter-group" id="filterGroupBrand">
+          <label class="filter-label" for="filterBrand">Brand / Restaurant</label>
+          <select id="filterBrand" class="select-control">
+            <option value="ALL">All Brands</option>
+          </select>
+        </div>
+
+        <!-- Outlet / Subzone Filter -->
+        <div class="filter-group" id="filterGroupOutlet">
+          <label class="filter-label" for="filterOutlet">Outlet / Subzone</label>
+          <select id="filterOutlet" class="select-control">
+            <option value="ALL">All Outlets</option>
+          </select>
+        </div>
+
+        <!-- Item Performance Classification Filter -->
+        <div class="filter-group">
+          <label class="filter-label" for="filterClassification">Velocity Classification</label>
+          <select id="filterClassification" class="select-control">
+            <option value="ALL">All Classifications</option>
+            <option value="FAST_MOVING">🔥 Fast Moving</option>
+            <option value="GROWING">📈 Growing</option>
+            <option value="STABLE">➡ Stable</option>
+            <option value="DECLINING">📉 Declining</option>
+            <option value="SLOW_MOVING">🐢 Slow Moving</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         SECTION: KPI CARDS GRID (8 Metrics with Dynamic Visibility)
+         ======================================================================= -->
+    <section class="kpi-grid" id="kpiGrid">
+      <!-- 1. Total Sales -->
+      <div class="kpi-card" id="kpiTotalSales">
+        <div class="kpi-top">
+          <span class="kpi-label">Total Sales (Revenue)</span>
+          <div class="kpi-icon-wrap sales"><i data-lucide="dollar-sign"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiSales">₹0.00</span>
+        </div>
+        <div class="kpi-bottom">
+          <span id="lblKpiSalesSub">Across Selected Period</span>
+          <span class="growth-pill positive" id="kpiSalesGrowthPill"><i data-lucide="trending-up" style="width: 12px; height: 12px;"></i> MoM: +0.0%</span>
+        </div>
+      </div>
+
+      <!-- 2. Total Quantity Sold -->
+      <div class="kpi-card" id="kpiTotalQuantity">
+        <div class="kpi-top">
+          <span class="kpi-label">Total Quantity Sold</span>
+          <div class="kpi-icon-wrap qty"><i data-lucide="package-check"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiQuantity">0</span>
+        </div>
+        <div class="kpi-bottom">
+          <span>Units Ordered</span>
+          <span class="growth-pill" id="kpiQtyGrowthPill">MoM: 0.0%</span>
+        </div>
+      </div>
+
+      <!-- 3. Total Orders / Invoices -->
+      <div class="kpi-card" id="kpiTotalOrders">
+        <div class="kpi-top">
+          <span class="kpi-label">Total Orders / Invoices</span>
+          <div class="kpi-icon-wrap orders"><i data-lucide="receipt"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiOrders">0</span>
+        </div>
+        <div class="kpi-bottom">
+          <span>Transactions / Bills</span>
+          <span class="growth-pill" id="kpiOrdersGrowthPill">MoM: 0.0%</span>
+        </div>
+      </div>
+
+      <!-- 4. Average Order Value (AOV) -->
+      <div class="kpi-card" id="kpiAvgOrderValue">
+        <div class="kpi-top">
+          <span class="kpi-label">Average Order Value (AOV)</span>
+          <div class="kpi-icon-wrap aov"><i data-lucide="shopping-bag"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiAov">₹0.00</span>
+        </div>
+        <div class="kpi-bottom">
+          <span>Sales / Orders</span>
+          <span style="color: var(--text-muted); font-size: 0.72rem;">Basket Size</span>
+        </div>
+      </div>
+
+      <!-- 5. Total Unique Items -->
+      <div class="kpi-card" id="kpiTotalItems">
+        <div class="kpi-top">
+          <span class="kpi-label">Total Unique Items</span>
+          <div class="kpi-icon-wrap items"><i data-lucide="utensils"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiItems">0</span>
+        </div>
+        <div class="kpi-bottom">
+          <span>Menu / Catalog Items</span>
+          <span class="growth-pill positive" id="valActiveItemsRatio">Active Items</span>
+        </div>
+      </div>
+
+      <!-- 6. Total Brands / Outlets -->
+      <div class="kpi-card" id="kpiTotalBrands">
+        <div class="kpi-top">
+          <span class="kpi-label" id="lblKpiBrandsTitle">Total Brands / Outlets</span>
+          <div class="kpi-icon-wrap brands"><i data-lucide="store"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiBrands">1</span>
+        </div>
+        <div class="kpi-bottom">
+          <span id="valBrandSub">Restaurant Outlets</span>
+          <span style="color: var(--color-growth); font-weight: 700;">Operational</span>
+        </div>
+      </div>
+
+      <!-- 7. Total Categories -->
+      <div class="kpi-card" id="kpiTotalCategories">
+        <div class="kpi-top">
+          <span class="kpi-label">Total Categories</span>
+          <div class="kpi-icon-wrap categories"><i data-lucide="layers"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiCategories">0</span>
+        </div>
+        <div class="kpi-bottom">
+          <span>Item Categories</span>
+          <span style="color: var(--accent-primary); font-weight: 600;">Menu Segments</span>
+        </div>
+      </div>
+
+      <!-- 8. Average Monthly Sales -->
+      <div class="kpi-card" id="kpiAvgMonthlySales">
+        <div class="kpi-top">
+          <span class="kpi-label">Average Monthly Sales</span>
+          <div class="kpi-icon-wrap avgmonthly"><i data-lucide="calculator"></i></div>
+        </div>
+        <div class="kpi-value-box">
+          <span class="kpi-value" id="valKpiAvgMonthlySales">₹0.00</span>
+        </div>
+        <div class="kpi-bottom">
+          <span>Monthly Run-rate</span>
+          <span style="color: var(--text-secondary); font-weight: 600;">Normalized</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         NAVIGATION TABS
+         ======================================================================= -->
+    <nav class="tabs-navigation" id="tabsNavigation">
+      <button class="tab-btn active" data-tab="tabOverview" id="btnTabOverview">
+        <i data-lucide="layout-dashboard"></i> Overview &amp; Trends
+      </button>
+      <button class="tab-btn" data-tab="tabTopItems" id="btnTabTopItems">
+        <i data-lucide="trophy"></i> Top Selling Items (Last 6 Months)
+      </button>
+      <button class="tab-btn" data-tab="tabMonthWiseTop" id="btnTabMonthWiseTop">
+        <i data-lucide="calendar-check"></i> Month-wise Top Items
+      </button>
+      <button class="tab-btn" data-tab="tabItemPerformance" id="btnTabItemPerformance">
+        <i data-lucide="activity"></i> Item Performance &amp; Directory
+      </button>
+      <button class="tab-btn" data-tab="tabGrowthAnalysis" id="btnTabGrowthAnalysis">
+        <i data-lucide="trending-up"></i> Item Growth Analysis
+      </button>
+      <button class="tab-btn" data-tab="tabCategoryBrand" id="btnTabCategoryBrand">
+        <i data-lucide="pie-chart"></i> Category &amp; Brand Analysis
+      </button>
+      <button class="tab-btn" data-tab="tabRawData" id="btnTabRawData">
+        <i data-lucide="table-2"></i> Raw Data Explorer
+      </button>
+    </nav>
+
+    <!-- =======================================================================
+         TAB PANEL 1: OVERVIEW & 6-MONTH TRENDS
+         ======================================================================= -->
+    <div class="tab-content-panel active" id="tabOverview">
+      
+      <!-- Last 6 Months MoM Performance Table -->
+      <div class="dashboard-card" id="cardLast6Months">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="calendar"></i> Last 6 Months Performance Breakdown</h2>
+            <p class="card-subtitle">Chronological monthly progression, sales revenue, volume, and Month-over-Month (MoM) growth %</p>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-secondary" id="btnExportMonthlyFromCard">
+              <i data-lucide="download"></i> Export Table
+            </button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table" id="tableLast6Months">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th class="num">Sales (Revenue)</th>
+                  <th class="num">Quantity Sold</th>
+                  <th class="num">Orders / Invoices</th>
+                  <th class="num">Avg Order Value</th>
+                  <th class="num">MoM Growth %</th>
+                  <th>Growth Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyLast6Months">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Interactive Trends Chart -->
+      <div class="dashboard-card" id="cardMonthlyTrendChart">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="line-chart"></i> Monthly Trajectory &amp; Multi-Metric Trends</h2>
+            <p class="card-subtitle">Interactive visualization across the 6-month historical timeline</p>
+          </div>
+          <div class="card-actions">
+            <div class="metric-switcher" id="trendMetricSwitcher">
+              <button class="metric-switch-btn active" data-metric="sales">Sales (₹)</button>
+              <button class="metric-switch-btn" data-metric="quantity">Quantity</button>
+              <button class="metric-switch-btn" data-metric="orders">Orders</button>
+              <button class="metric-switch-btn" data-metric="growth">MoM Growth %</button>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrapper">
+            <canvas id="chartMonthlyTrend"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- =======================================================================
+         TAB PANEL 2: TOP SELLING ITEMS – LAST 6 MONTHS
+         ======================================================================= -->
+    <div class="tab-content-panel" id="tabTopItems">
+      
+      <!-- Top Items Horizontal Bar Chart -->
+      <div class="dashboard-card" id="cardTopItemsChart">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="bar-chart-horizontal"></i> Top Selling Items Ranking (Chart)</h2>
+            <p class="card-subtitle">Visual revenue comparison of the top performing items</p>
+          </div>
+          <div class="card-actions">
+            <div class="metric-switcher" id="topItemsChartLimitSwitcher">
+              <button class="metric-switch-btn active" data-limit="10">Top 10</button>
+              <button class="metric-switch-btn" data-limit="20">Top 20</button>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrapper-tall">
+            <canvas id="chartTopSellingItems"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Selling Items Table with Selector & Sorting -->
+      <div class="dashboard-card" id="cardTopItemsTable">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="award"></i> Top Selling Items – Last 6 Months</h2>
+            <p class="card-subtitle">Click on any item name to view deep monthly trajectory and item-level details</p>
+          </div>
+          <div class="card-actions">
+            <!-- Limit Selector -->
+            <div class="filter-group" style="flex-direction: row; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Show:</span>
+              <select id="selectTopItemsLimit" class="select-control" style="min-width: 95px;">
+                <option value="10">Top 10</option>
+                <option value="20" selected>Top 20</option>
+                <option value="50">Top 50</option>
+                <option value="100">Top 100</option>
+                <option value="ALL">All Items</option>
+              </select>
+            </div>
+
+            <!-- Sort Selector -->
+            <div class="filter-group" style="flex-direction: row; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Sort By:</span>
+              <select id="selectTopItemsSort" class="select-control" style="min-width: 155px;">
+                <option value="sales-desc">Highest Sales</option>
+                <option value="qty-desc">Highest Quantity</option>
+                <option value="growth-desc">Highest Growth</option>
+                <option value="growth-asc">Lowest Growth</option>
+                <option value="name-asc">Item Name (A-Z)</option>
+              </select>
+            </div>
+
+            <button class="btn btn-sm btn-secondary" id="btnExportTopItemsFromCard">
+              <i data-lucide="download"></i> Export CSV
+            </button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table" id="tableTopSellingItems">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">Rank</th>
+                  <th class="sortable" data-sort-key="item">Item Name <span class="sort-icon">↕</span></th>
+                  <th class="sortable" data-sort-key="category">Category <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="quantity">Quantity Sold <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="sales">Sales (Revenue) <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="avgPrice">Avg Selling Price <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="contribution">% Contribution <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="growth">Growth % <span class="sort-icon">↕</span></th>
+                  <th style="text-align: center;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyTopSellingItems">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- =======================================================================
+         TAB PANEL 3: MONTH-WISE TOP ITEMS
+         ======================================================================= -->
+    <div class="tab-content-panel" id="tabMonthWiseTop">
+      <div class="dashboard-card" id="cardMonthWiseTop">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="calendar-range"></i> Month-wise Top 10 Selling Items</h2>
+            <p class="card-subtitle">Monthly leaders across each of the last 6 months to detect seasonal and temporal shifts</p>
+          </div>
+          <div class="card-actions">
+            <div class="filter-group" style="flex-direction: row; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Select Month:</span>
+              <select id="selectMonthWiseMonth" class="select-control" style="min-width: 150px;">
+                <option value="ALL">All 6 Months (Combined Table)</option>
+              </select>
+            </div>
+            <button class="btn btn-sm btn-secondary" id="btnExportMonthWiseTop">
+              <i data-lucide="download"></i> Download CSV
+            </button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table" id="tableMonthWiseTop">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th style="width: 60px;">Rank</th>
+                  <th>Item Name</th>
+                  <th>Category</th>
+                  <th class="num">Quantity Sold</th>
+                  <th class="num">Sales (Revenue)</th>
+                  <th class="num">Unit Selling Price</th>
+                  <th class="num">Orders with Item</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyMonthWiseTop">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =======================================================================
+         TAB PANEL 4: ITEM PERFORMANCE & COMPLETE DIRECTORY
+         ======================================================================= -->
+    <div class="tab-content-panel" id="tabItemPerformance">
+      
+      <!-- Velocity Classification Legend -->
+      <div class="dashboard-card" style="background: #fafbfc;">
+        <div class="card-body" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 0.85rem 1.25rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Velocity Badges:</span>
+            <span class="badge-class fast-moving" title="High volume & revenue contribution">🔥 Fast Moving</span>
+            <span class="badge-class growing" title="MoM growth greater than +10%">📈 Growing</span>
+            <span class="badge-class stable" title="MoM growth between -10% and +10%">➡ Stable</span>
+            <span class="badge-class declining" title="MoM growth less than -10%">📉 Declining</span>
+            <span class="badge-class slow-moving" title="Low sales or active in <= 2 months">🐢 Slow Moving</span>
+          </div>
+          <div>
+            <span style="font-size: 0.78rem; color: var(--text-secondary);">Configurable dynamic velocity algorithms applied to 6-month sales volume.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item Performance Directory Table with Pagination -->
+      <div class="dashboard-card" id="cardItemDirectory">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="list-checks"></i> Item Performance Directory (All Items)</h2>
+            <p class="card-subtitle">Comprehensive item metrics, active months, best/worst months, and sales contribution</p>
+          </div>
+          <div class="card-actions">
+            <!-- Rows per page selector -->
+            <div class="filter-group" style="flex-direction: row; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Per Page:</span>
+              <select id="selectItemsPerPage" class="select-control" style="min-width: 80px;">
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="250">250</option>
+              </select>
+            </div>
+            <button class="btn btn-sm btn-secondary" id="btnExportItemPerformance">
+              <i data-lucide="download"></i> Export Directory CSV
+            </button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table" id="tableItemPerformance">
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort-key="item">Item Name <span class="sort-icon">↕</span></th>
+                  <th class="sortable" data-sort-key="category">Category <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="quantity">Total Qty <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="sales">Total Sales <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="avgPrice">Avg Price <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="monthsSold">Months Sold <span class="sort-icon">↕</span></th>
+                  <th>Best Month</th>
+                  <th>Worst Month</th>
+                  <th class="num sortable" data-sort-key="growth">MoM Growth % <span class="sort-icon">↕</span></th>
+                  <th class="num sortable" data-sort-key="contribution">Sales % <span class="sort-icon">↕</span></th>
+                  <th>Classification</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyItemPerformance">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Footer -->
+          <div class="table-pagination" id="paginationItemPerformance">
+            <div class="pagination-info" id="paginationInfoText">
+              Showing 1 to 25 of 83 items
+            </div>
+            <div class="pagination-controls" id="paginationControlsBox">
+              <button class="page-btn" id="btnPagePrev" disabled>&laquo; Previous</button>
+              <div id="pageNumberButtons" style="display: inline-flex; gap: 0.25rem;"></div>
+              <button class="page-btn" id="btnPageNext">Next &raquo;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- =======================================================================
+         TAB PANEL 5: ITEM GROWTH ANALYSIS (Top Growing & Declining Items)
+         ======================================================================= -->
+    <div class="tab-content-panel" id="tabGrowthAnalysis">
+      
+      <div class="split-cards-grid">
+        <!-- Top Growing Items Card -->
+        <div class="dashboard-card" id="cardTopGrowing">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2 class="card-title" style="color: var(--color-growth);">
+                <i data-lucide="trending-up"></i> TOP GROWING ITEMS
+              </h2>
+              <p class="card-subtitle" id="subGrowingPeriod">Comparing Latest Month vs Previous Month</p>
+            </div>
+            <div class="card-actions">
+              <select id="sortGrowingBy" class="select-control" style="min-width: 130px;">
+                <option value="percent-desc">Sort: Growth %</option>
+                <option value="amount-desc">Sort: Growth Amount (₹)</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-responsive">
+              <table class="data-table" id="tableTopGrowing">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th class="num" id="thGrowingPrevMonth">Prev Month</th>
+                    <th class="num" id="thGrowingCurrMonth">Curr Month</th>
+                    <th class="num">Growth Amount</th>
+                    <th class="num">Growth %</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyTopGrowing">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Declining Items Card -->
+        <div class="dashboard-card" id="cardTopDeclining">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2 class="card-title" style="color: var(--color-decline);">
+                <i data-lucide="trending-down"></i> TOP DECLINING ITEMS
+              </h2>
+              <p class="card-subtitle" id="subDecliningPeriod">Comparing Latest Month vs Previous Month</p>
+            </div>
+            <div class="card-actions">
+              <select id="sortDecliningBy" class="select-control" style="min-width: 130px;">
+                <option value="percent-asc">Sort: Decline %</option>
+                <option value="amount-desc">Sort: Decline Amount (₹)</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-responsive">
+              <table class="data-table" id="tableTopDeclining">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th class="num" id="thDecliningPrevMonth">Prev Month</th>
+                    <th class="num" id="thDecliningCurrMonth">Curr Month</th>
+                    <th class="num">Decline Amount</th>
+                    <th class="num">Decline %</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyTopDeclining">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- =======================================================================
+         TAB PANEL 6: CATEGORY & BRAND/OUTLET ANALYSIS
+         ======================================================================= -->
+    <div class="tab-content-panel" id="tabCategoryBrand">
+      
+      <!-- Category Analysis Split -->
+      <div class="charts-split-grid">
+        <!-- Category Performance Table -->
+        <div class="dashboard-card" id="cardCategoryTable">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2 class="card-title"><i data-lucide="layers"></i> Category Performance Analysis</h2>
+              <p class="card-subtitle">Click on any category row to filter the entire dashboard by that category</p>
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-sm btn-secondary" id="btnExportCategory">
+                <i data-lucide="download"></i> Export CSV
+              </button>
+            </div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-responsive">
+              <table class="data-table" id="tableCategoryAnalysis">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th class="num">Sales (Revenue)</th>
+                    <th class="num">Quantity</th>
+                    <th class="num">Orders</th>
+                    <th class="num">% Contribution</th>
+                    <th class="num">MoM Growth</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyCategoryAnalysis">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Breakdown Doughnut Chart -->
+        <div class="dashboard-card" id="cardCategoryChart">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2 class="card-title"><i data-lucide="pie-chart"></i> Revenue Share by Category</h2>
+              <p class="card-subtitle">Contribution across catalog</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="chart-wrapper">
+              <canvas id="chartCategoryShare"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Brand / Outlet Performance Table & Charts -->
+      <div class="dashboard-card" id="cardBrandAnalysis">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="store"></i> Brand &amp; Restaurant Outlet Performance</h2>
+            <p class="card-subtitle">Sales, volume, and order totals across brands and outlets (click to filter)</p>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-secondary" id="btnExportBrand">
+              <i data-lucide="download"></i> Export Brand Report
+            </button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table" id="tableBrandAnalysis">
+              <thead>
+                <tr>
+                  <th>Brand / Restaurant</th>
+                  <th>Subzone / Location</th>
+                  <th>City</th>
+                  <th class="num">Sales (Revenue)</th>
+                  <th class="num">Quantity</th>
+                  <th class="num">Orders</th>
+                  <th class="num">% Contribution</th>
+                  <th class="num">MoM Growth</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyBrandAnalysis">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- =======================================================================
+         TAB PANEL 7: RAW DATA EXPLORER
+         ======================================================================= -->
+    <div class="tab-content-panel" id="tabRawData">
+      <div class="dashboard-card" id="cardRawData">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2 class="card-title"><i data-lucide="file-spreadsheet"></i> Normalized &amp; Filtered Records Explorer</h2>
+            <p class="card-subtitle">Displaying processed analytical transactions with instant search and filter matching</p>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-primary" id="btnExportFilteredDataFromTab">
+              <i data-lucide="download"></i> Download Filtered CSV Data
+            </button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table" id="tableRawData">
+              <thead id="theadRawData">
+                <!-- Dynamic based on mapped columns -->
+              </thead>
+              <tbody id="tbodyRawData">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Raw Data Pagination -->
+          <div class="table-pagination" id="paginationRawData">
+            <div class="pagination-info" id="paginationRawInfoText">
+              Showing records
+            </div>
+            <div class="pagination-controls" id="paginationRawControls">
+              <button class="page-btn" id="btnRawPrev" disabled>&laquo; Previous</button>
+              <span style="font-size: 0.8rem; font-weight: 600;" id="txtRawPageIndicator">Page 1</span>
+              <button class="page-btn" id="btnRawNext">Next &raquo;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- =========================================================================
+       MODAL 1: ITEM DETAIL VIEW (With Monthly Performance & Trajectory Chart)
+       ========================================================================= -->
+  <div class="modal-overlay" id="itemDetailModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="utensils" style="color: var(--accent-primary);"></i>
+          <span id="modalItemTitle">Item Details</span>
+        </div>
+        <button class="modal-close-btn" id="btnCloseItemModal" title="Close">
+          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Item Overview Badges -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <span style="font-size: 0.85rem; color: var(--text-secondary);" id="modalItemCategoryBrand">Main Course • PUNJABI CHULHA</span>
+          </div>
+          <div id="modalItemClassificationBadge">
+            <span class="badge-class fast-moving">🔥 Fast Moving</span>
+          </div>
+        </div>
+
+        <!-- 6 KPI Stat Box -->
+        <div class="item-stat-grid" id="modalItemStatGrid">
+          <div class="item-stat-card">
+            <span class="item-stat-label">Total Sales</span>
+            <span class="item-stat-value" id="modalValSales">₹0.00</span>
+          </div>
+          <div class="item-stat-card">
+            <span class="item-stat-label">Total Quantity</span>
+            <span class="item-stat-value" id="modalValQty">0</span>
+          </div>
+          <div class="item-stat-card">
+            <span class="item-stat-label">Avg Selling Price</span>
+            <span class="item-stat-value" id="modalValAvgPrice">₹0.00</span>
+          </div>
+          <div class="item-stat-card">
+            <span class="item-stat-label">Sales Contribution</span>
+            <span class="item-stat-value" id="modalValContribution">0.0%</span>
+          </div>
+          <div class="item-stat-card">
+            <span class="item-stat-label">Best Month</span>
+            <span class="item-stat-value" id="modalValBestMonth" style="font-size: 1.05rem; color: var(--color-growth);">N/A</span>
+          </div>
+          <div class="item-stat-card">
+            <span class="item-stat-label">Worst Month</span>
+            <span class="item-stat-value" id="modalValWorstMonth" style="font-size: 1.05rem; color: var(--color-decline);">N/A</span>
+          </div>
+        </div>
+
+        <!-- Monthly Trajectory Line Chart -->
+        <div>
+          <h4 style="font-size: 0.88rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">
+            Monthly Sales &amp; Quantity Trajectory
+          </h4>
+          <div class="chart-wrapper-modal">
+            <canvas id="chartItemModalTrajectory"></canvas>
+          </div>
+        </div>
+
+        <!-- Monthly Performance Table -->
+        <div>
+          <h4 style="font-size: 0.88rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">
+            Monthly Performance Breakdown
+          </h4>
+          <div class="table-responsive">
+            <table class="data-table" id="tableModalItemMonthly">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th class="num">Quantity</th>
+                  <th class="num">Sales</th>
+                  <th class="num">Unit Price</th>
+                  <th class="num">Orders</th>
+                  <th class="num">Growth %</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyModalItemMonthly">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnFilterByThisItem">
+          <i data-lucide="filter"></i> Filter Dashboard by This Item
+        </button>
+        <button class="btn btn-primary" id="btnCloseItemModal2">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 2: EXECUTIVE REPORT GENERATION & PRINT / PDF MODAL
+       ========================================================================= -->
+  <div class="modal-overlay" id="reportGenerationModal">
+    <div class="modal-dialog modal-large">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="file-text" style="color: var(--accent-primary);"></i>
+          <span>Executive Sales &amp; Item Performance Report</span>
+        </div>
+        <button class="modal-close-btn" id="btnCloseReportModal" title="Close">
+          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" id="printableReportContent">
+        <div class="report-document">
+          
+          <!-- Banner -->
+          <div class="report-header-banner">
+            <div>
+              <h1 style="font-size: 1.5rem; font-weight: 800; color: #0f172a; margin-bottom: 0.25rem;">
+                SALES &amp; ITEM ANALYTICS EXECUTIVE REPORT
+              </h1>
+              <p style="font-size: 0.9rem; color: #475569;" id="rptPeriodSub">
+                Performance Evaluation Period: March – August
+              </p>
+            </div>
+            <div style="text-align: right;">
+              <span style="display: block; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Generated On</span>
+              <span style="font-weight: 700; font-size: 0.9rem;" id="rptGeneratedDate">September 2026</span>
+            </div>
+          </div>
+
+          <!-- Section 1: Dashboard Executive Summary -->
+          <div class="report-section">
+            <h3>1. Key Performance Indicators (Executive Summary)</h3>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.75rem;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.75rem; border-radius: 6px;">
+                <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700;">Total Sales</span>
+                <p style="font-size: 1.25rem; font-weight: 800; color: #0f172a;" id="rptKpiSales">₹0.00</p>
+              </div>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.75rem; border-radius: 6px;">
+                <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700;">Quantity Sold</span>
+                <p style="font-size: 1.25rem; font-weight: 800; color: #0f172a;" id="rptKpiQty">0</p>
+              </div>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.75rem; border-radius: 6px;">
+                <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700;">Total Orders</span>
+                <p style="font-size: 1.25rem; font-weight: 800; color: #0f172a;" id="rptKpiOrders">0</p>
+              </div>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.75rem; border-radius: 6px;">
+                <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700;">Average Order Value</span>
+                <p style="font-size: 1.25rem; font-weight: 800; color: #0f172a;" id="rptKpiAov">₹0.00</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Last 6 Months Sales Breakdown -->
+          <div class="report-section">
+            <h3>2. Last 6 Months Sales &amp; Growth Progression</h3>
+            <table class="data-table" style="margin-top: 0.5rem;">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th class="num">Sales (Revenue)</th>
+                  <th class="num">Quantity</th>
+                  <th class="num">Orders</th>
+                  <th class="num">MoM Growth %</th>
+                </tr>
+              </thead>
+              <tbody id="rptTbodyMonthly">
+                <!-- Dynamically filled -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Section 3: Top Selling Items -->
+          <div class="report-section">
+            <h3>3. Top Selling Items (Revenue Leaders)</h3>
+            <table class="data-table" style="margin-top: 0.5rem;">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Item Name</th>
+                  <th>Category</th>
+                  <th class="num">Quantity</th>
+                  <th class="num">Sales</th>
+                  <th class="num">% Contribution</th>
+                </tr>
+              </thead>
+              <tbody id="rptTbodyTopItems">
+                <!-- Dynamically filled -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Section 4: Growing & Declining Items Highlights -->
+          <div class="report-section">
+            <h3>4. Growth &amp; Decline Momentum Summary</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+              <div>
+                <h4 style="font-size: 0.85rem; font-weight: 700; color: #059669; margin-bottom: 0.35rem;">Top Growing Items</h4>
+                <div id="rptGrowingList" style="font-size: 0.82rem; line-height: 1.6;"></div>
+              </div>
+              <div>
+                <h4 style="font-size: 0.85rem; font-weight: 700; color: #e11d48; margin-bottom: 0.35rem;">Top Declining Items</h4>
+                <div id="rptDecliningList" style="font-size: 0.82rem; line-height: 1.6;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 5: Category Summary -->
+          <div class="report-section">
+            <h3>5. Category Performance Summary</h3>
+            <table class="data-table" style="margin-top: 0.5rem;">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class="num">Sales</th>
+                  <th class="num">Quantity</th>
+                  <th class="num">% Share</th>
+                </tr>
+              </thead>
+              <tbody id="rptTbodyCategory">
+                <!-- Dynamically filled -->
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnPrintReport">
+          <i data-lucide="printer"></i> Print Document
+        </button>
+        <button class="btn btn-primary" id="btnDownloadPdfReport">
+          <i data-lucide="download"></i> Download as PDF (jsPDF)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Toast Notification -->
+  <div class="toast-notification" id="toastNotification">
+    <div class="spinner" id="toastSpinner"></div>
+    <span id="toastMessage">Analysis completed successfully.</span>
+  </div>
+
+  <!-- Application Logic -->
+  <script src="./script.js"></script>
+</body>
+</html>
